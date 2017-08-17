@@ -1,34 +1,42 @@
 var wpAdminHide = {
 
-  active: false,
-
   /*
-   * Adds a domain name to localStorage
+   * Adds a domain name to Chrome storage
    */
   addD: function(d) {
-    localStorage[d] = true;
-    console.log(d + " added.");
+    var save = {};
+    save[d] = true;
+    chrome.storage.sync.set(save, function(result) {
+      console.log(d, "added to storage, admin bar removed.");
+    });
   },
 
   /*
-   * Removes a domain from localStorage
+   * Removes a domain from Chrome storage
    */
   remD: function(d) {
-    localStorage.removeItem(d);
-    console.log(d + " removed.");
+    chrome.storage.sync.remove(d, function() {
+      console.log(d, "removed from storage, admin bar restored.");
+    });
   },
 
   /*
-   * Checks for the existence of a localStorage item that matches the domain passed as the first
+   * Checks for the existence of a Chrome storage item that matches the domain passed as the first
    * argument. Second and third arguments are what to do if there is or isn't a match, respectively.
    */
   chkD: function(tabId, pass, fail) {
     chrome.tabs.get(tabId, function(tab) {
-      d = tab.url.split("/")[2];
-      if (localStorage[d]) {
-        pass(d);
-      } else {
-        fail(d);
+      if(tab.url.indexOf('chrome') == 0){
+        console.error('can\'t run on chrome pages, sorry :(');
+      }else{
+        d = tab.url.split("/")[2];
+        chrome.storage.sync.get(d, function(result){
+          if (result[d]) {
+            pass(d);
+          } else {
+            fail(d);
+          }
+        });
       }
     });
   },
@@ -36,28 +44,34 @@ var wpAdminHide = {
   removeBar: function(tabId) {
     chrome.tabs.executeScript(
       tabId, {
-        code: "document.getElementById('wpadminbar').style.display='none';document.getElementsByTagName('html')[0].style.setProperty('margin-top', '0px', 'important');document.getElementsByTagName('html')[0].style.setProperty('padding-top', '0px', 'important');",
+        code: [
+          "document.getElementById('wpadminbar').style.display = 'none';",
+          "document.getElementsByTagName('html')[0].style.setProperty('margin-top', '0px', 'important');",
+          "document.getElementsByTagName('html')[0].style.setProperty('padding-top', '0px', 'important');",
+          "document.getElementsByTagName('body')[0].classList.remove('admin-bar');"
+        ].join(''),
         runAt: "document_idle",
         allFrames: true
       },
       function() {
         wpAdminHide.toggleIcon(true);
-        console.log("Bar removed!");
       });
   },
 
   restoreBar: function(tabId) {
     chrome.tabs.executeScript(
       tabId, {
-        code: "document.getElementById('wpadminbar').removeAttribute('style');document.getElementsByTagName('html')[0].removeAttribute('style');",
+        code: [
+          "document.getElementById('wpadminbar').removeAttribute('style');",
+          "document.getElementsByTagName('html')[0].removeAttribute('style');",
+          "document.getElementsByTagName('body')[0].classList.add('admin-bar');"
+        ].join(''),
         runAt: "document_idle",
         allFrames: true
       },
       function() {
         wpAdminHide.toggleIcon(false);
-        console.log("Bar restored!");
       });
-
   },
 
   /*
@@ -71,8 +85,6 @@ var wpAdminHide = {
           "19": "img/icon19_1.png",
           "38": "img/icon38_1.png"
         }
-      }, function() {
-        this.active = true;
       });
     } else {
       chrome.browserAction.setIcon({
@@ -80,16 +92,15 @@ var wpAdminHide = {
           "19": "img/icon19_0.png",
           "38": "img/icon38_0.png"
         }
-      }, function() {
-        this.active = false;
       });
     }
   }
+
 };
 
 /* 
- * Listener for browser action button clickage. Checks the active tab against localstorage and toggles
- * the state of the plugin accordingly
+ * Listener for browser action button clickage. Checks the active tab against Chrome storage
+ * and toggles the state of the plugin accordingly.
  */
 chrome.browserAction.onClicked.addListener(function(tab) {
   wpAdminHide.chkD(
@@ -107,20 +118,35 @@ chrome.browserAction.onClicked.addListener(function(tab) {
 
 /*
  * Keep the icon up to date based on whether or not the domain exists in local storage.
- * Going to assum that the hiding was handled on tab load so this is just for keeping up
+ * Going to assume that the hiding was handled on tab load so this is just for keeping up
  * appearances.
  */
-chrome.tabs.onActivated.addListener(function(tab) {
+var updateBrowserIcon = function(tab) {
+  var id = tab.tabId || tab.id;
   wpAdminHide.chkD(
-    tab.tabId,
+    id,
     function() {
       wpAdminHide.toggleIcon(true);
     },
     function() {
       wpAdminHide.toggleIcon(false);
     });
+};
+
+// Update icon when tab is changed within a single window
+chrome.tabs.onActivated.addListener(updateBrowserIcon);
+
+// Update icon when window focus changes
+chrome.windows.onFocusChanged.addListener(function(windowId){
+  chrome.tabs.query({windowId: windowId, active: true}, function(tab){
+    updateBrowserIcon(tab['0']);
+  });
 });
 
+/**
+ * This listener fires each time the user loads a new page. If the domain is recognized
+ * then the bar removal script is fired.
+ */
 chrome.tabs.onUpdated.addListener(function(tabId, data, tab) {
   wpAdminHide.chkD(
     tabId,
