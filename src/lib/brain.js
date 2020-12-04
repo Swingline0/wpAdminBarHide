@@ -44,12 +44,15 @@ var wpAdminHide = {
   removeBar: function(tabId) {
     chrome.tabs.executeScript(
       tabId, {
-        code: [
-          "document.getElementById('wpadminbar').style.display = 'none';",
-          "document.getElementsByTagName('html')[0].style.setProperty('margin-top', '0px', 'important');",
-          "document.getElementsByTagName('html')[0].style.setProperty('padding-top', '0px', 'important');",
-          "document.getElementsByTagName('body')[0].classList.remove('admin-bar');"
-        ].join(''),
+        code: `
+          var wpadminbar = document.getElementById('wpadminbar');
+          if (wpadminbar) {
+            wpadminbar.style.display = 'none';
+            document.documentElement.style.setProperty('margin-top', '0px', 'important');
+            document.documentElement.style.setProperty('padding-top', '0px', 'important');
+            document.body.classList.remove('admin-bar');
+          }
+        `,
         runAt: "document_idle",
         allFrames: true
       },
@@ -61,11 +64,14 @@ var wpAdminHide = {
   restoreBar: function(tabId) {
     chrome.tabs.executeScript(
       tabId, {
-        code: [
-          "document.getElementById('wpadminbar').removeAttribute('style');",
-          "document.getElementsByTagName('html')[0].removeAttribute('style');",
-          "document.getElementsByTagName('body')[0].classList.add('admin-bar');"
-        ].join(''),
+        code: `
+          var wpadminbar = document.getElementById('wpadminbar');
+          if (wpadminbar) {
+            wpadminbar.removeAttribute('style');
+            document.documentElement.removeAttribute('style');
+            document.body.classList.add('admin-bar');
+          }
+        `,
         runAt: "document_idle",
         allFrames: true
       },
